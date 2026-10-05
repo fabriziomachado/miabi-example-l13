@@ -1,5 +1,9 @@
 # Pipeline-as-code for this Laravel 13 + React (Inertia) app.
 # Miabi adopts this file when the application is created from Git.
+#
+# Keep `run` as a quoted one-liner. Folded YAML (`>`) plus a line that ends
+# in `>` redirects the rest of the script to /dev/null, so composer never
+# sees composer.json even though the runner checked the repo out.
 apiVersion: miabi.io/v1
 kind: Pipeline
 metadata:
@@ -15,12 +19,8 @@ steps:
     image: php:8.4-cli
     env:
       CI: "true"
-    run: >
-      apt-get update -qq && apt-get install -y -qq git unzip libpq-dev >
-      /dev/null && docker-php-ext-install pdo_pgsql >/dev/null &&
-      curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer &&
-      composer install --no-interaction --prefer-dist &&
-      php artisan test
+      DEBIAN_FRONTEND: noninteractive
+    run: "apt-get update -qq && apt-get install -y -qq git unzip libpq-dev >/dev/null && docker-php-ext-install pdo_pgsql >/dev/null && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && composer install --no-interaction --prefer-dist && php artisan test"
 
   - name: test-frontend
     image: node:22

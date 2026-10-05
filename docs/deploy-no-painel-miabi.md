@@ -242,23 +242,20 @@ deployment succeeded (release v2)
 
 ## GitOps e pipeline
 
-Nada desta app aparece em **GitOps** nem em **Pipelines**, e isso é esperado: ela foi criada como
-uma Application avulsa, configurada à mão no painel.
-
-![GitOps](images/15-gitops.png)
-
-![Pipelines vazio](images/16-pipelines.png)
+A app nasceu como Application avulsa. Depois o pipeline do repositório foi adotado
+(`POST /apps/15/pipeline/resync`) e o GitSource `laravel-example` passou a apontar para `envs/dev`.
 
 ### Pipeline
 
-O repositório tem `.miabi/pipeline.yaml`, mas o Miabi só adota o arquivo quando a opção **Use the
-pipeline from .miabi/pipeline.yaml** está marcada. Ela aparece depois de **Check repository** na
-criação (passo 5), e esse botão não foi usado. Para ligar numa app que já existe, há o endpoint de
-resync (`POST /apps/{id}/pipeline/resync`), que adota o pipeline do repositório.
+O `.miabi/pipeline.yaml` só vira um pipeline no painel quando a opção **Use the pipeline from
+.miabi/pipeline.yaml** está marcada (aparece depois de **Check repository**) ou quando a app já
+existente faz resync. Sem isso, **Pipelines** fica vazio mesmo com o arquivo no Git.
 
-Com o pipeline ligado, cada deploy roda `test-php`, `test-frontend`, `build` e `deploy`, e um push
-na `main` dispara o pipeline. O deploy direto pelo Dockerfile foi mantido no primeiro teste para
-isolar problemas de imagem dos problemas de CI.
+Com o pipeline ligado, **Deploy** na app dispara uma run: `test-php` → `test-frontend` → `build` →
+`deploy`. Push na `main` só dispara sozinho se o webhook do pipeline estiver cadastrado no GitHub.
+
+O `run: >` do exemplo da plataforma termina uma linha com `>`, e o YAML folded transforma isso em
+redirecionamento para `/dev/null`. O arquivo deste repositório usa um `run` em uma linha só.
 
 ### GitOps
 
