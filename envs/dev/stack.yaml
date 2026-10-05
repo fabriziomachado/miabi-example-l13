@@ -1,7 +1,7 @@
 # Dev desired state for miabi-example-l13.
 #
 # Two different jobs, as in the Miabi docs (Pipelines, Deploy on Push, GitOps):
-#   • This file is the stack: database, volume, route, env, resources.
+#   • This file is the stack: database, route, env, resources.
 #   • .miabi/pipeline.yaml is the image. `uses: deploy` rolls out each push
 #     by digest. Do not write that tag or digest here — a git app is described
 #     by its source, and the generated tag (run-<n>) is not a manifest field.
@@ -22,13 +22,6 @@ spec:
   version: "16-alpine"
   # Reuse the Postgres already running in the workspace when one is compatible.
   instance: auto
----
-apiVersion: miabi.io/v1
-kind: Volume
-metadata: { name: laravel-uploads }
-spec:
-  # Public disk for uploaded files (FILESYSTEM_DISK=public).
-  size: 5Gi
 ---
 apiVersion: miabi.io/v1
 kind: Secret
@@ -52,11 +45,20 @@ spec:
     - container: 8080
       scheme: http
   deployment:
-    # One container, not a Swarm service. laravel-uploads is node-local, and
-    # a service task can be scheduled on another node than the volume.
-    # Raise this to runtime: service only with a shared volume (see envs/prod).
-    runtime: container
+    # Two Swarm tasks, free to land on either node. Postgres is reached by
+    # name on the overlay network, so the database does not pin a task.
+    # The old node.id constraint existed only because a node-local volume
+    # forces every task onto the disk's node. This workspace has no shared
+    # storage class, so uploads are not a mounted volume: session, cache and
+    # queue already live in Postgres and are the same for both tasks.
+    runtime: service
+    replicas: 2
     strategy: rolling
+    update:
+      parallelism: 1
+      delaySeconds: 10
+  placement:
+    constraints: []
   # Healthcheck is set in the panel (HTTP /up:8080, start period 90s).
   # The running panel (1.10.11) rejects a healthcheck field in the manifest.
   env:
@@ -94,13 +96,11 @@ spec:
     AUTORUN_LARAVEL_STORAGE_LINK: "true"
     AUTORUN_LARAVEL_MIGRATION: "true"
     AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
+    AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
     AUTORUN_LARAVEL_OPTIMIZE: "true"
   secretEnv:
     - APP_KEY
     - DB_PASSWORD
-  mounts:
-    - volume: laravel-uploads
-      path: /var/www/html/storage/app/public
   resources:
     memory: 512Mi
     cpu: "0.5"
