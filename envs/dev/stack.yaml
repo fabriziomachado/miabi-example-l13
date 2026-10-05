@@ -58,8 +58,16 @@ spec:
       delaySeconds: 10
   placement:
     constraints: []
-  # Healthcheck is set in the panel (HTTP /up:8080, start period 90s).
-  # The running panel (1.10.11) rejects a healthcheck field in the manifest.
+  # Probe Laravel itself (/up), not only the web server. Start period covers
+  # AUTORUN migrate + optimize before the first check must pass.
+  healthcheck:
+    type: http
+    path: /up
+    port: 8080
+    intervalSeconds: 30
+    timeoutSeconds: 5
+    retries: 3
+    startPeriodSeconds: 90
   env:
     APP_NAME: Laravel
     APP_ENV: production

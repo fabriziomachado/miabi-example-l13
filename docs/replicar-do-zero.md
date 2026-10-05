@@ -13,14 +13,11 @@ Dois donos, e cada um fica com o seu:
 | Quem | O quê |
 | --- | --- |
 | `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest a cada push em `main` |
-| `envs/dev/stack.yaml` | Banco, rota, env, 2 réplicas Swarm. Não fixa tag nem digest |
-| Painel | App criada a partir do Git (é isso que adota o pipeline), healthcheck, `APP_KEY` e o segredo do MinIO depois de cada sync |
+| `envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest |
+| Painel | App criada a partir do Git (é isso que adota o pipeline), `APP_KEY` e o segredo do MinIO depois de cada sync |
 
 `envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace. Não
 crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
-
-No painel 1.10.11 o campo `healthcheck` do manifesto é rejeitado. O probe fica
-só no painel.
 
 ## 0. Apagar só esta app, se for um reteste
 
@@ -54,16 +51,15 @@ puxar, no registry do workspace (`registry…/ws_<id>/minio:<tag>`).
 2. **Applications → New**, origem Git, nome `laravel-example`, branch `main`,
    build Dockerfile, porta `8080`. Criar por Git é o que adota
    `.miabi/pipeline.yaml`. Aplicar o manifesto não liga o pipeline.
-3. Na app, healthcheck HTTP, path `/up`, porta `8080`, start period 90s,
-   intervalo 30s, timeout 5s, 3 tentativas.
-4. Na sua máquina, `php artisan key:generate --show`. Guarde o valor. Não
+3. Na sua máquina, `php artisan key:generate --show`. Guarde o valor. Não
    cole no git.
 
 ## 3. Ajustar o manifesto e sincronizar
 
 Em `envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do MinIO
 desta instalação, por exemplo `http://mb-app-……:9000`. `APP_KEY` e
-`AWS_SECRET_ACCESS_KEY` ficam placeholders. Commit e push em `main`.
+`AWS_SECRET_ACCESS_KEY` ficam placeholders. O `healthcheck` HTTP `/up:8080`
+já está no YAML. Commit e push em `main`.
 
 **GitOps → New source:**
 
@@ -72,9 +68,10 @@ desta instalação, por exemplo `http://mb-app-……:9000`. `APP_KEY` e
 
 Abra o diff e sincronize. O sync cria o banco lógico `laravel_db` (em cima de
 um Postgres compatível que já exista), a rota
-`laravel-example.miabi.unesc.net` e sobe a app como serviço Swarm com 2
-réplicas, sem volume e sem prender nó. Não há storage compartilhado neste
-cluster; um volume local obrigaria as duas tasks a caírem no mesmo nó.
+`laravel-example.miabi.unesc.net`, o healthcheck e sobe a app como serviço
+Swarm com 2 réplicas, sem volume e sem prender nó. Não há storage
+compartilhado neste cluster; um volume local obrigaria as duas tasks a caírem
+no mesmo nó.
 
 Assim que o sync terminar, na env da app:
 
@@ -84,8 +81,7 @@ Assim que o sync terminar, na env da app:
 O sync regrava toda chave que está no manifesto, inclusive segredo. Se a
 homepage responder 500, o container subiu com o placeholder. Reponha os dois
 valores e use **Restart** na app (com env alterada, o restart gera um deploy
-novo). Confira de novo o healthcheck `/up:8080`; neste painel um sync já
-chegou a limpar o path.
+novo).
 
 ## 4. Pipeline
 

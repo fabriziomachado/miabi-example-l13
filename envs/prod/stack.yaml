@@ -51,7 +51,14 @@ spec:
     update:
       parallelism: 1
       delaySeconds: 15
-  # Healthcheck stays in the panel: 1.10.11 rejects a healthcheck field.
+  healthcheck:
+    type: http
+    path: /up
+    port: 8080
+    intervalSeconds: 30
+    timeoutSeconds: 5
+    retries: 3
+    startPeriodSeconds: 90
   env:
     APP_NAME: Laravel
     APP_ENV: production
