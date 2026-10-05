@@ -29,7 +29,13 @@ RUN composer install \
 
 COPY --chown=www-data:www-data . .
 RUN composer dump-autoload --optimize --no-dev \
- && mkdir -p storage/app/public bootstrap/cache \
+ && mkdir -p \
+      storage/app/public \
+      storage/framework/cache/data \
+      storage/framework/sessions \
+      storage/framework/views \
+      storage/logs \
+      bootstrap/cache \
  && php artisan package:discover --ansi
 
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
