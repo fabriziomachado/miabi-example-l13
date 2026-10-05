@@ -12,9 +12,8 @@
 # prune off.
 # The zone miabi.unesc.net is already verified; it is not declared here.
 #
-# APP_KEY is a placeholder. Sync overwrites the app env with this file.
-# Put the real `php artisan key:generate --show` value back after sync
-# (secretEnv). Do not commit it. A generated vault secret is not a Laravel key.
+# APP_KEY is not in this file. Set it in the panel (secret) from
+# `php artisan key:generate --show`. A sync only rewrites keys listed below.
 apiVersion: miabi.io/v1
 kind: Database
 metadata: { name: laravel-db }
@@ -23,15 +22,6 @@ spec:
   version: "16-alpine"
   # Reuse the Postgres already running in the workspace when one is compatible.
   instance: auto
----
-apiVersion: miabi.io/v1
-kind: Secret
-metadata: { name: laravel-app-key }
-spec:
-  # Documents a generated secret in the workspace vault. Apply/GitOps cannot
-  # interpolate {{ .secrets.* }} — APP_KEY is set on the Application below.
-  generate: true
-  length: 48
 ---
 apiVersion: miabi.io/v1
 kind: Application
@@ -75,8 +65,6 @@ spec:
     APP_DEBUG: "false"
     APP_URL: "https://laravel-example.miabi.unesc.net"
     ASSET_URL: "https://laravel-example.miabi.unesc.net"
-    # CHANGE ME before the first sync — see the note at the top of this file.
-    APP_KEY: "base64:change-me-to-a-real-laravel-app-key========"
 
     LOG_CHANNEL: stderr
     LOG_LEVEL: info
@@ -92,7 +80,7 @@ spec:
 
     # Default disk is s3 so both replicas see the same files. The bucket
     # `laravel` lives on the workspace MinIO. The secret is a placeholder;
-    # put the real MinIO secret back after sync, same as APP_KEY.
+    # put the real MinIO secret back in the panel after sync.
     FILESYSTEM_DISK: s3
     AWS_ACCESS_KEY_ID: minioadmin
     AWS_SECRET_ACCESS_KEY: change-me
@@ -123,7 +111,6 @@ spec:
     # both passes the value must still be the Swarm literal {{.Node.Hostname}}.
     NODE_HOSTNAME: '{{`{{ "{{.Node.Hostname}}" }}`}}'
   secretEnv:
-    - APP_KEY
     - DB_PASSWORD
     - AWS_SECRET_ACCESS_KEY
   resources:

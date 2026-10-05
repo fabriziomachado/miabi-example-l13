@@ -14,7 +14,7 @@ Dois donos, e cada um fica com o seu:
 | --- | --- |
 | `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest a cada push em `main` |
 | `.miabi/envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest |
-| Painel | App criada a partir do Git (é isso que adota o pipeline), `APP_KEY` e o segredo do MinIO depois de cada sync |
+| Painel | App criada a partir do Git (é isso que adota o pipeline), `APP_KEY` (secret, fora do manifesto) e o segredo do MinIO |
 
 `.miabi/envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace.
 Não crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
@@ -57,9 +57,9 @@ puxar, no registry do workspace (`registry…/ws_<id>/minio:<tag>`).
 ## 3. Ajustar o manifesto e sincronizar
 
 Em `.miabi/envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do
-MinIO desta instalação, por exemplo `http://mb-app-……:9000`. `APP_KEY` e
-`AWS_SECRET_ACCESS_KEY` ficam placeholders. O `healthcheck` HTTP `/up:8080`
-já está no YAML. Commit e push em `main`.
+MinIO desta instalação, por exemplo `http://mb-app-……:9000`.
+`AWS_SECRET_ACCESS_KEY` fica placeholder. `APP_KEY` não entra no YAML. O
+`healthcheck` HTTP `/up:8080` já está no manifesto. Commit e push em `main`.
 
 **GitOps → New source:**
 
@@ -75,13 +75,12 @@ no mesmo nó.
 
 Assim que o sync terminar, na env da app:
 
-- `APP_KEY` = o valor do passo 2 (secret)
+- `APP_KEY` = o valor do passo 2 (secret). Não está no manifesto, então o sync não regrava.
 - `AWS_SECRET_ACCESS_KEY` = a senha root do MinIO (secret)
 
 O sync regrava toda chave que está no manifesto, inclusive segredo. Se a
-homepage responder 500, o container subiu com o placeholder. Reponha os dois
-valores e use **Restart** na app (com env alterada, o restart gera um deploy
-novo).
+homepage responder 500 por chave inválida, o container subiu sem `APP_KEY`
+ou com o placeholder antigo. Cole a chave no painel e use **Restart**.
 
 ## 4. Pipeline
 
