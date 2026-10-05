@@ -5,10 +5,11 @@
 #   • .miabi/pipeline.yaml is the image. `uses: deploy` rolls out each push
 #     by digest. Do not write that tag or digest here — a git app is described
 #     by its source, and the generated tag (run-<n>) is not a manifest field.
-#   • envs/prod is the promotion file. Pin $MIABI_IMAGE_DIGEST there, in
-#     another workspace. Syncing both folders here would collide on the names.
+#   • .miabi/envs/prod is the promotion file. Pin $MIABI_IMAGE_DIGEST there,
+#     in another workspace. Syncing both folders here would collide on names.
 #
-# Point a GitSource at this folder, ref main, sync manual, prune off.
+# Point a GitSource at this folder (.miabi/envs/dev), ref main, sync manual,
+# prune off.
 # The zone miabi.unesc.net is already verified; it is not declared here.
 #
 # APP_KEY is a placeholder. Sync overwrites the app env with this file.

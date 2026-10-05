@@ -11,4 +11,4 @@ Live at <https://laravel-example.miabi.unesc.net>. The from-scratch steps
 are in [docs/replicar-do-zero.md](docs/replicar-do-zero.md).
 
 GitOps manifests, adapted from the platform's `examples/laravel-inertia`, are
-in `envs/dev/stack.yaml` and `envs/prod/stack.yaml`.
+in `.miabi/envs/dev/stack.yaml` and `.miabi/envs/prod/stack.yaml`.

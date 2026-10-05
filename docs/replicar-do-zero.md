@@ -13,16 +13,16 @@ Dois donos, e cada um fica com o seu:
 | Quem | O quê |
 | --- | --- |
 | `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest a cada push em `main` |
-| `envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest |
+| `.miabi/envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest |
 | Painel | App criada a partir do Git (é isso que adota o pipeline), `APP_KEY` e o segredo do MinIO depois de cada sync |
 
-`envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace. Não
-crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
+`.miabi/envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace.
+Não crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
 
 ## 0. Apagar só esta app, se for um reteste
 
 Pare e apague a application `laravel-example`. A rota e o pipeline dela saem
-junto. Apague o GitSource `envs/dev` e o banco lógico `laravel_db`.
+junto. Apague o GitSource `.miabi/envs/dev` e o banco lógico `laravel_db`.
 
 Deixe quietos os outros apps (react*, adminer, hello, autoscaler,
 `laravel-git-detect`), o volume `test` e o MinIO, se for reutilizar o mesmo.
@@ -56,14 +56,14 @@ puxar, no registry do workspace (`registry…/ws_<id>/minio:<tag>`).
 
 ## 3. Ajustar o manifesto e sincronizar
 
-Em `envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do MinIO
-desta instalação, por exemplo `http://mb-app-……:9000`. `APP_KEY` e
+Em `.miabi/envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do
+MinIO desta instalação, por exemplo `http://mb-app-……:9000`. `APP_KEY` e
 `AWS_SECRET_ACCESS_KEY` ficam placeholders. O `healthcheck` HTTP `/up:8080`
 já está no YAML. Commit e push em `main`.
 
 **GitOps → New source:**
 
-- repositório acima, ref `main`, path `envs/dev`
+- repositório acima, ref `main`, path `.miabi/envs/dev`
 - sync **manual**, prune **desligado**, self-heal **desligado**
 
 Abra o diff e sincronize. O sync cria o banco lógico `laravel_db` (em cima de
@@ -88,7 +88,7 @@ novo).
 **Pipelines → laravel-example → Run** (branch `main`), enquanto o webhook não
 estiver no GitHub. Os quatro passos são `test-php`, `test-frontend`, `build`,
 `deploy`. O `uses: deploy` publica a imagem por digest. Não copie a tag
-`run-<n>` para o `envs/dev`.
+`run-<n>` para o `.miabi/envs/dev`.
 
 Para o push disparar sozinho: no pipeline, o ícone de webhook, e no GitHub
 **Settings → Webhooks**, evento push, content type `application/json`.
@@ -102,5 +102,5 @@ Para o push disparar sozinho: no pipeline, o ícone de webhook, e no GitHub
   (bucket `laravel`). As duas réplicas usam o mesmo bucket, então o arquivo
   não depende do nó.
 
-`envs/prod` continua sem GitSource. Promover é outro workspace: tire o
+`.miabi/envs/prod` continua sem GitSource. Promover é outro workspace: tire o
 `uses: deploy` de lá e grave o `$MIABI_IMAGE_DIGEST` no manifesto de prod.

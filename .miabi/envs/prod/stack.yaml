@@ -1,10 +1,10 @@
-# Production desired state — same names as envs/dev, digest-pinned and scheduled
-# as a Swarm service. Do not point a second GitSource at this folder in a
-# workspace that already syncs envs/dev: the names collide on purpose.
+# Production desired state — same names as .miabi/envs/dev, digest-pinned and
+# scheduled as a Swarm service. Do not point a second GitSource at this folder
+# in a workspace that already syncs .miabi/envs/dev: the names collide on purpose.
 #
 # Promotion = one commit that sets `digest` (and usually `tag`) to the pipeline's
 # $MIABI_IMAGE_DIGEST. A revert commit rolls back. This is not done on every
-# dev deploy: envs/dev stays a Git source and `.miabi/pipeline.yaml` ships it.
+# dev deploy: .miabi/envs/dev stays a Git source and `.miabi/pipeline.yaml` ships it.
 #
 # APP_KEY is a placeholder. Replace it before syncing; never reuse the dev key.
 apiVersion: miabi.io/v1

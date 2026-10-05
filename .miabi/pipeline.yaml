@@ -2,9 +2,9 @@
 # Miabi adopts this file when the application is created from Git.
 #
 # This deploys the dev app. Each push builds an image and `uses: deploy`
-# rolls that digest out. Do not copy the tag into envs/dev/stack.yaml.
+# rolls that digest out. Do not copy the tag into .miabi/envs/dev/stack.yaml.
 # Production is a separate workspace: drop this deploy step there and
-# promote by committing $MIABI_IMAGE_DIGEST into envs/prod/stack.yaml.
+# promote by committing $MIABI_IMAGE_DIGEST into .miabi/envs/prod/stack.yaml.
 #
 # Keep `run` as a quoted one-liner. Folded YAML (`>`) plus a line that ends
 # in `>` redirects the rest of the script to /dev/null, so composer never
