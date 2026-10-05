@@ -97,8 +97,9 @@ spec:
 
     # Docker Swarm expands this per task to the node hostname (not the
     # manager/worker role — Swarm templates only expose Hostname/ID).
-    # Escaped so Miabi's {{ .databases.* }} pass leaves the literal for Docker.
-    NODE_HOSTNAME: '{{ "{{.Node.Hostname}}" }}'
+    # Double-escaped: Miabi renders env twice (GitOps file + apply). After
+    # both passes the value must still be the Swarm literal {{.Node.Hostname}}.
+    NODE_HOSTNAME: '{{`{{ "{{.Node.Hostname}}" }}`}}'
   secretEnv:
     - APP_KEY
     - DB_PASSWORD
