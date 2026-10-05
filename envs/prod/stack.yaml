@@ -42,7 +42,9 @@ spec:
       scheme: http
   deployment:
     runtime: service
-    replicas: 2
+    # One replica: laravel-uploads is node-local. Raising this needs a shared
+    # storageClass (see the Volume note) or FILESYSTEM_DISK=s3.
+    replicas: 1
     strategy: rolling
     update:
       parallelism: 1
@@ -52,8 +54,8 @@ spec:
     APP_NAME: Laravel
     APP_ENV: production
     APP_DEBUG: "false"
-    APP_URL: "https://laravel-example.miabi.unesc.net"
-    ASSET_URL: "https://laravel-example.miabi.unesc.net"
+    APP_URL: "https://laravel-prod.miabi.unesc.net"
+    ASSET_URL: "https://laravel-prod.miabi.unesc.net"
     APP_KEY: "base64:change-me-to-a-real-laravel-app-key========"
 
     LOG_CHANNEL: stderr
@@ -97,7 +99,7 @@ apiVersion: miabi.io/v1
 kind: Route
 metadata: { name: laravel-example }
 spec:
-  hosts: [laravel-example.miabi.unesc.net]
+  hosts: [laravel-prod.miabi.unesc.net]
   app: laravel-example
   port: 8080
   path: /

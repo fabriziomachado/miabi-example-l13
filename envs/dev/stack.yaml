@@ -46,8 +46,11 @@ spec:
     - container: 8080
       scheme: http
   deployment:
+    # Swarm service. Keep one replica: laravel-uploads is a node-local volume,
+    # and a second task on another node would see a different disk.
+    runtime: service
+    replicas: 1
     strategy: rolling
-    runtime: container
   # Healthcheck is set in the panel (HTTP /up:8080, start period 90s).
   # miabi.io/v1 on the running panel (1.10.11) has no healthcheck field yet.
   env:
