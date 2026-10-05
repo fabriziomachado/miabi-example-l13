@@ -48,15 +48,8 @@ spec:
   deployment:
     strategy: rolling
     runtime: container
-  healthcheck:
-    type: http
-    path: /up
-    port: 8080
-    intervalSeconds: 30
-    timeoutSeconds: 10
-    retries: 5
-    # AUTORUN migrates and optimizes before /up answers.
-    startPeriodSeconds: 90
+  # Healthcheck is set in the panel (HTTP /up:8080, start period 90s).
+  # miabi.io/v1 on the running panel (1.10.11) has no healthcheck field yet.
   env:
     APP_NAME: Laravel
     APP_ENV: production

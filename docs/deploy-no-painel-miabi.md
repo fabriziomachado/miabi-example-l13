@@ -264,7 +264,9 @@ isolar problemas de imagem dos problemas de CI.
 
 Os manifests ficam em `envs/dev/stack.yaml` e `envs/prod/stack.yaml`, no mesmo formato de
 `examples/laravel-inertia`, com o registry `registry.miabi.unesc.net/ws_1/laravel-example` e o host
-`laravel-example.miabi.unesc.net`. O domínio `miabi.unesc.net` não entra no manifesto: ele já está
+`laravel-example.miabi.unesc.net`. O health check não está no YAML: o painel 1.10.11 rejeita o
+campo `healthcheck` (ele existe no fork, ainda não nessa versão). Ele continua configurado na aba
+Settings. O domínio `miabi.unesc.net` não entra no manifesto: ele já está
 verificado no painel, e o GitOps não deve assumir a zona.
 
 O GitSource `laravel-dev-test` (branch `cursor/laravel-inertia-gitops-example-0a1e` no fork da
