@@ -47,10 +47,9 @@ spec:
   deployment:
     # Two Swarm tasks, free to land on either node. Postgres is reached by
     # name on the overlay network, so the database does not pin a task.
-    # The old node.id constraint existed only because a node-local volume
-    # forces every task onto the disk's node. This workspace has no shared
-    # storage class, so uploads are not a mounted volume: session, cache and
-    # queue already live in Postgres and are the same for both tasks.
+    # There is no shared volume: session, cache and queue live in Postgres,
+    # and files use the s3 disk against the MinIO already running in this
+    # workspace (alias below). A node-local volume would pin every task.
     runtime: service
     replicas: 2
     strategy: rolling
@@ -82,7 +81,17 @@ spec:
     DB_PASSWORD: "{{ .databases.laravel-db.password }}"
     DB_SSLMODE: disable
 
-    FILESYSTEM_DISK: public
+    # Default disk is s3 so both replicas see the same files. The bucket
+    # `laravel` lives on the workspace MinIO. The secret is a placeholder;
+    # put the real MinIO secret back after sync, same as APP_KEY.
+    FILESYSTEM_DISK: s3
+    AWS_ACCESS_KEY_ID: minioadmin
+    AWS_SECRET_ACCESS_KEY: change-me
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_BUCKET: laravel
+    AWS_ENDPOINT: http://mb-app-u3fltfmh-18:9000
+    AWS_URL: http://mb-app-u3fltfmh-18:9000
+    AWS_USE_PATH_STYLE_ENDPOINT: "true"
     SESSION_DRIVER: database
     CACHE_STORE: database
     QUEUE_CONNECTION: database
@@ -101,6 +110,7 @@ spec:
   secretEnv:
     - APP_KEY
     - DB_PASSWORD
+    - AWS_SECRET_ACCESS_KEY
   resources:
     memory: 512Mi
     cpu: "0.5"
