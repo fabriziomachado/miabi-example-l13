@@ -20,7 +20,7 @@ steps:
     env:
       CI: "true"
       DEBIAN_FRONTEND: noninteractive
-    run: "apt-get update -qq && apt-get install -y -qq git unzip libpq-dev >/dev/null && docker-php-ext-install pdo_pgsql >/dev/null && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && composer install --no-interaction --prefer-dist && php artisan test"
+    run: "apt-get update -qq && apt-get install -y -qq git unzip libpq-dev libsqlite3-dev >/dev/null && docker-php-ext-install pdo_pgsql pdo_sqlite >/dev/null && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && composer install --no-interaction --prefer-dist && php artisan test"
 
   - name: test-frontend
     image: node:22
