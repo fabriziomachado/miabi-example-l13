@@ -6,3 +6,6 @@ Miabi Laravel example (`examples/laravel-inertia` in the platform repository).
 The image listens on port **8080**. Miabi terminates TLS and probes `/up`.
 Runtime settings (`APP_KEY`, `DB_*`, `SSL_MODE`, `AUTORUN_*`) come from the
 application environment, not from this image.
+
+Live at <https://laravel-example.miabi.unesc.net>. The panel steps used to
+publish it are in [docs/deploy-no-painel-miabi.md](docs/deploy-no-painel-miabi.md).
