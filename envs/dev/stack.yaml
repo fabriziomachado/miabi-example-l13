@@ -115,6 +115,11 @@ spec:
     AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
     AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
     AUTORUN_LARAVEL_OPTIMIZE: "true"
+
+    # Docker Swarm expands {{.Node.Hostname}} per task. Quoted without a
+    # space after {{ so Miabi's own {{ .databases.* }} interpolator leaves
+    # the literal for the engine. The app badge reads NODE_HOSTNAME.
+    NODE_HOSTNAME: "{{.Node.Hostname}}"
   secretEnv:
     - APP_KEY
     - DB_PASSWORD
