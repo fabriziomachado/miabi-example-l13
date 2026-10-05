@@ -40,8 +40,10 @@ kind: Application
 metadata: { name: laravel-example }
 spec:
   # Built by .miabi/pipeline.yaml and pushed to the workspace registry.
+  # Pin the digest from the green run (tag run-<number> is the human label).
   image: registry.miabi.unesc.net/ws_1/laravel-example
-  tag: "3"
+  tag: "run-4"
+  digest: "sha256:5adb2460af167e922a2858874222ac98be341a569811f5af313fc306c623c039"
   ports:
     - container: 8080
       scheme: http
