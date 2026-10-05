@@ -1,0 +1,110 @@
+# Production desired state — same names as envs/dev, digest-pinned and scheduled
+# as a Swarm service. Do not point a second GitSource at this folder in a
+# workspace that already syncs envs/dev: the names collide on purpose.
+#
+# Promotion = a commit that sets `digest` (and usually `tag`) to the pipeline's
+# $MIABI_IMAGE_DIGEST. A revert commit rolls back.
+#
+# APP_KEY is a placeholder. Replace it before syncing; never reuse the dev key.
+apiVersion: miabi.io/v1
+kind: Database
+metadata: { name: laravel-db }
+spec:
+  engine: postgres
+  version: "16-alpine"
+  instance: dedicated
+---
+apiVersion: miabi.io/v1
+kind: Volume
+metadata: { name: laravel-uploads }
+spec:
+  size: 20Gi
+  # Uncomment when shared storage is registered (replicas may land on other nodes):
+  # storageClass: nfs-shared
+---
+apiVersion: miabi.io/v1
+kind: Secret
+metadata: { name: laravel-app-key }
+spec:
+  generate: true
+  length: 48
+---
+apiVersion: miabi.io/v1
+kind: Application
+metadata: { name: laravel-example }
+spec:
+  image: registry.miabi.unesc.net/ws_1/laravel-example
+  tag: "3"
+  # Replace with $MIABI_IMAGE_DIGEST from the pipeline run you are promoting.
+  digest: "sha256:fba38990f0218bfc26e0272df8ed1f9672ea5df2d6f51b77e138b7bfb138cbb0"
+  ports:
+    - container: 8080
+      scheme: http
+  deployment:
+    runtime: service
+    replicas: 2
+    strategy: rolling
+    update:
+      parallelism: 1
+      delaySeconds: 15
+  healthcheck:
+    type: http
+    path: /up
+    port: 8080
+    intervalSeconds: 10
+    startPeriodSeconds: 90
+    retries: 3
+  env:
+    APP_NAME: Laravel
+    APP_ENV: production
+    APP_DEBUG: "false"
+    APP_URL: "https://laravel-example.miabi.unesc.net"
+    ASSET_URL: "https://laravel-example.miabi.unesc.net"
+    APP_KEY: "base64:change-me-to-a-real-laravel-app-key========"
+
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: info
+    PHP_OPCACHE_ENABLE: "1"
+
+    DB_CONNECTION: pgsql
+    DB_HOST: "{{ .databases.laravel-db.host }}"
+    DB_PORT: "{{ .databases.laravel-db.port }}"
+    DB_DATABASE: "{{ .databases.laravel-db.name }}"
+    DB_USERNAME: "{{ .databases.laravel-db.user }}"
+    DB_PASSWORD: "{{ .databases.laravel-db.password }}"
+    DB_SSLMODE: disable
+
+    FILESYSTEM_DISK: public
+    SESSION_DRIVER: database
+    CACHE_STORE: database
+    QUEUE_CONNECTION: database
+
+    SSL_MODE: "off"
+    HEALTHCHECK_PATH: /up
+    CADDY_SERVER_ROOT: /var/www/html/public
+
+    AUTORUN_ENABLED: "true"
+    AUTORUN_LARAVEL_STORAGE_LINK: "true"
+    AUTORUN_LARAVEL_MIGRATION: "true"
+    AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
+    AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
+    AUTORUN_LARAVEL_OPTIMIZE: "true"
+  secretEnv:
+    - APP_KEY
+    - DB_PASSWORD
+  mounts:
+    - volume: laravel-uploads
+      path: /var/www/html/storage/app/public
+  resources:
+    memory: 1Gi
+    cpu: "1"
+---
+apiVersion: miabi.io/v1
+kind: Route
+metadata: { name: laravel-example }
+spec:
+  hosts: [laravel-example.miabi.unesc.net]
+  app: laravel-example
+  port: 8080
+  path: /
+  tls: acme

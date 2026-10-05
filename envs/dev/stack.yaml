@@ -1,0 +1,117 @@
+# Dev desired state for miabi-example-l13.
+# Adapted from the platform example (examples/laravel-inertia/envs/dev):
+# same resources, with this workspace's registry and a host under the
+# domain that is already verified (miabi.unesc.net).
+#
+# Point a GitSource at this folder, ref main, sync manual, prune off.
+# Do not sync envs/prod into the same workspace: resource names match on
+# purpose, one folder per workspace.
+#
+# APP_KEY below is a placeholder. GitOps replaces the app env with this
+# file, so syncing as-is would overwrite the key already set in the panel.
+# Put the real `php artisan key:generate --show` value here before syncing.
+apiVersion: miabi.io/v1
+kind: Database
+metadata: { name: laravel-db }
+spec:
+  engine: postgres
+  version: "16-alpine"
+  # Reuse the Postgres already running in the workspace when one is compatible.
+  instance: auto
+---
+apiVersion: miabi.io/v1
+kind: Volume
+metadata: { name: laravel-uploads }
+spec:
+  # Public disk for uploaded files (FILESYSTEM_DISK=public).
+  size: 5Gi
+---
+apiVersion: miabi.io/v1
+kind: Secret
+metadata: { name: laravel-app-key }
+spec:
+  # Documents a generated secret in the workspace vault. Apply/GitOps cannot
+  # interpolate {{ .secrets.* }} — APP_KEY is set on the Application below.
+  generate: true
+  length: 48
+---
+apiVersion: miabi.io/v1
+kind: Application
+metadata: { name: laravel-example }
+spec:
+  # Built by .miabi/pipeline.yaml and pushed to the workspace registry.
+  image: registry.miabi.unesc.net/ws_1/laravel-example
+  tag: "3"
+  ports:
+    - container: 8080
+      scheme: http
+  deployment:
+    strategy: rolling
+    runtime: container
+  healthcheck:
+    type: http
+    path: /up
+    port: 8080
+    intervalSeconds: 30
+    timeoutSeconds: 10
+    retries: 5
+    # AUTORUN migrates and optimizes before /up answers.
+    startPeriodSeconds: 90
+  env:
+    APP_NAME: Laravel
+    APP_ENV: production
+    APP_DEBUG: "false"
+    APP_URL: "https://laravel-example.miabi.unesc.net"
+    ASSET_URL: "https://laravel-example.miabi.unesc.net"
+    # CHANGE ME before the first sync — see the note at the top of this file.
+    APP_KEY: "base64:change-me-to-a-real-laravel-app-key========"
+
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: info
+    PHP_OPCACHE_ENABLE: "1"
+
+    DB_CONNECTION: pgsql
+    DB_HOST: "{{ .databases.laravel-db.host }}"
+    DB_PORT: "{{ .databases.laravel-db.port }}"
+    DB_DATABASE: "{{ .databases.laravel-db.name }}"
+    DB_USERNAME: "{{ .databases.laravel-db.user }}"
+    DB_PASSWORD: "{{ .databases.laravel-db.password }}"
+    DB_SSLMODE: disable
+
+    FILESYSTEM_DISK: public
+    SESSION_DRIVER: database
+    CACHE_STORE: database
+    QUEUE_CONNECTION: database
+
+    # serversideup/php FrankenPHP — TLS ends at Miabi, not inside the container.
+    SSL_MODE: "off"
+    HEALTHCHECK_PATH: /up
+    CADDY_SERVER_ROOT: /var/www/html/public
+
+    AUTORUN_ENABLED: "true"
+    AUTORUN_LARAVEL_STORAGE_LINK: "true"
+    AUTORUN_LARAVEL_MIGRATION: "true"
+    AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
+    AUTORUN_LARAVEL_OPTIMIZE: "true"
+  secretEnv:
+    - APP_KEY
+    - DB_PASSWORD
+  mounts:
+    - volume: laravel-uploads
+      path: /var/www/html/storage/app/public
+  resources:
+    memory: 512Mi
+    cpu: "0.5"
+---
+# The zone miabi.unesc.net is already registered and verified in the panel
+# (wildcard, TLS automatic). It is not declared here so GitOps does not take
+# ownership of that domain.
+apiVersion: miabi.io/v1
+kind: Route
+metadata: { name: laravel-example }
+spec:
+  hosts: [laravel-example.miabi.unesc.net]
+  app: laravel-example
+  port: 8080
+  path: /
+  tls: acme

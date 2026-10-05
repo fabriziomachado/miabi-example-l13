@@ -262,15 +262,16 @@ isolar problemas de imagem dos problemas de CI.
 
 ### GitOps
 
-O GitOps do Miabi lê manifests `miabi.io/v1` de um repositório. Este repositório não tem nenhum: o
-stack de exemplo está no fork da plataforma (`examples/laravel-inertia/envs/*/stack.yaml`), com
-placeholders (`registry.example.com`, `laravel.example.com`). O GitSource `laravel-dev-test` aponta
-para ele, mas nunca sincronizou por causa do erro da branch com barra.
+Os manifests ficam em `envs/dev/stack.yaml` e `envs/prod/stack.yaml`, no mesmo formato de
+`examples/laravel-inertia`, com o registry `registry.miabi.unesc.net/ws_1/laravel-example` e o host
+`laravel-example.miabi.unesc.net`. O domínio `miabi.unesc.net` não entra no manifesto: ele já está
+verificado no painel, e o GitOps não deve assumir a zona.
 
-Para ligar esta app ao GitOps:
+O GitSource `laravel-dev-test` (branch `cursor/laravel-inertia-gitops-example-0a1e` no fork da
+plataforma) foi removido. Ele nunca sincronizou: o painel 1.10.11 não resolve branch com barra no
+nome, e o stack ainda tinha placeholders. A fonte nova aponta para este repositório, branch `main`,
+caminho `envs/dev`, sync manual e prune desligado. `envs/prod` fica só no Git — sincronizar os dois
+no mesmo workspace colide nos nomes.
 
-1. Em **Settings → GitOps manifest → Generate manifest**, exportar o manifest da app atual (os
-   segredos saem só pelo nome, em `secretEnv`).
-2. Versionar o manifest, por exemplo em `deploy/miabi/` neste repositório, com host, banco e imagem
-   reais em vez dos placeholders.
-3. Criar um **New git source** apontando para esse caminho, ver o diff e sincronizar.
+Antes de sincronizar, troque o `APP_KEY` placeholder em `envs/dev/stack.yaml`. O GitOps substitui o
+env da app pelo arquivo, então um sync com o placeholder apaga a chave que já está no painel.

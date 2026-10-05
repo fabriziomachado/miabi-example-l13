@@ -9,3 +9,6 @@ application environment, not from this image.
 
 Live at <https://laravel-example.miabi.unesc.net>. The panel steps used to
 publish it are in [docs/deploy-no-painel-miabi.md](docs/deploy-no-painel-miabi.md).
+
+GitOps manifests, adapted from the platform's `examples/laravel-inertia`, are
+in `envs/dev/stack.yaml` and `envs/prod/stack.yaml`.
