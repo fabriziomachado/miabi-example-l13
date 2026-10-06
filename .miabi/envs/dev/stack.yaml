@@ -8,12 +8,12 @@
 #   • .miabi/envs/prod is the promotion file. Pin $MIABI_IMAGE_DIGEST there,
 #     in another workspace. Syncing both folders here would collide on names.
 #
-# Point a GitSource at this folder (.miabi/envs/dev), ref main, sync manual,
-# prune off.
+# Point a GitSource at this folder (.miabi/envs/dev), ref main. Automatic,
+# prune and self-heal are the intended policy: Git is the desired state.
+# Secrets are names in the vault, not values. Create them once in
+# Sources → Secrets (laravel-app-key, minio-root-password). A missing
+# name fails the sync instead of writing a placeholder.
 # The zone miabi.unesc.net is already verified; it is not declared here.
-#
-# APP_KEY is not in this file. Set it in the panel (secret) from
-# `php artisan key:generate --show`. A sync only rewrites keys listed below.
 apiVersion: miabi.io/v1
 kind: Database
 metadata: { name: laravel-db }
@@ -63,6 +63,7 @@ spec:
     APP_NAME: Laravel
     APP_ENV: production
     APP_DEBUG: "false"
+    APP_KEY: "{{ .secrets.laravel-app-key }}"
     APP_URL: "https://laravel-example.miabi.unesc.net"
     ASSET_URL: "https://laravel-example.miabi.unesc.net"
 
@@ -79,11 +80,11 @@ spec:
     DB_SSLMODE: disable
 
     # Default disk is s3 so both replicas see the same files. The bucket
-    # `laravel` lives on the workspace MinIO. The secret is a placeholder;
-    # put the real MinIO secret back in the panel after sync.
+    # `laravel` lives on the workspace MinIO. The password is the vault
+    # secret minio-root-password — the same value minio-1 uses as root.
     FILESYSTEM_DISK: s3
     AWS_ACCESS_KEY_ID: minioadmin
-    AWS_SECRET_ACCESS_KEY: change-me
+    AWS_SECRET_ACCESS_KEY: "{{ .secrets.minio-root-password }}"
     AWS_DEFAULT_REGION: us-east-1
     AWS_BUCKET: laravel
     AWS_ENDPOINT: http://mb-app-u3fltfmh-18:9000
@@ -104,13 +105,8 @@ spec:
     AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
     AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
     AUTORUN_LARAVEL_OPTIMIZE: "true"
-
-    # Docker Swarm expands this per task to the node hostname (not the
-    # manager/worker role — Swarm templates only expose Hostname/ID).
-    # Double-escaped: Miabi renders env twice (GitOps file + apply). After
-    # both passes the value must still be the Swarm literal {{.Node.Hostname}}.
-    NODE_HOSTNAME: '{{`{{ "{{.Node.Hostname}}" }}`}}'
   secretEnv:
+    - APP_KEY
     - DB_PASSWORD
     - AWS_SECRET_ACCESS_KEY
   resources:

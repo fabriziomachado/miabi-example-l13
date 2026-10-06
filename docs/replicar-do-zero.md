@@ -13,8 +13,8 @@ Dois donos, e cada um fica com o seu:
 | Quem | O quê |
 | --- | --- |
 | `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest a cada push em `main` |
-| `.miabi/envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest |
-| Painel | App criada a partir do Git (é isso que adota o pipeline), `APP_KEY` (secret, fora do manifesto) e o segredo do MinIO |
+| `.miabi/envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest. Secrets só por nome (`{{ .secrets.* }}`) |
+| Painel | App criada a partir do Git (é isso que adota o pipeline). Vault: `laravel-app-key` e `minio-root-password` |
 
 `.miabi/envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace.
 Não crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
@@ -51,20 +51,22 @@ puxar, no registry do workspace (`registry…/ws_<id>/minio:<tag>`).
 2. **Applications → New**, origem Git, nome `laravel-example`, branch `main`,
    build Dockerfile, porta `8080`. Criar por Git é o que adota
    `.miabi/pipeline.yaml`. Aplicar o manifesto não liga o pipeline.
-3. Na sua máquina, `php artisan key:generate --show`. Guarde o valor. Não
-   cole no git.
+3. **Sources → Secrets.** Crie (ou reutilize) `laravel-app-key` com
+   `php artisan key:generate --show`, e `minio-root-password` com a senha
+   root do MinIO que já está no ar. Não cole nenhum dos dois no Git.
 
 ## 3. Ajustar o manifesto e sincronizar
 
 Em `.miabi/envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do
 MinIO desta instalação, por exemplo `http://mb-app-……:9000`.
-`AWS_SECRET_ACCESS_KEY` fica placeholder. `APP_KEY` não entra no YAML. O
-`healthcheck` HTTP `/up:8080` já está no manifesto. Commit e push em `main`.
+`APP_KEY` e `AWS_SECRET_ACCESS_KEY` apontam para o vault
+(`{{ .secrets.laravel-app-key }}`, `{{ .secrets.minio-root-password }}`).
+O `healthcheck` HTTP `/up:8080` já está no manifesto. Commit e push em `main`.
 
 **GitOps → New source:**
 
 - repositório acima, ref `main`, path `.miabi/envs/dev`
-- sync **manual**, prune **desligado**, self-heal **desligado**
+- sync **automatic**, prune **ligado**, self-heal **ligado**
 
 Abra o diff e sincronize. O sync cria o banco lógico `laravel_db` (em cima de
 um Postgres compatível que já exista), a rota
@@ -73,14 +75,9 @@ Swarm com 2 réplicas, sem volume e sem prender nó. Não há storage
 compartilhado neste cluster; um volume local obrigaria as duas tasks a caírem
 no mesmo nó.
 
-Assim que o sync terminar, na env da app:
-
-- `APP_KEY` = o valor do passo 2 (secret). Não está no manifesto, então o sync não regrava.
-- `AWS_SECRET_ACCESS_KEY` = a senha root do MinIO (secret)
-
-O sync regrava toda chave que está no manifesto, inclusive segredo. Se a
-homepage responder 500 por chave inválida, o container subiu sem `APP_KEY`
-ou com o placeholder antigo. Cole a chave no painel e use **Restart**.
+Se o sync falhar com `unknown secret`, o vault ainda não tem um dos nomes
+acima. Crie o secret e sincronize de novo. O self-heal não apaga o valor:
+o Git só declara o nome.
 
 ## 4. Pipeline
 
