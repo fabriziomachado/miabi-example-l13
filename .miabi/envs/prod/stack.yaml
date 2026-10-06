@@ -136,10 +136,18 @@ spec:
     AUTORUN_LARAVEL_MIGRATION_FORCE: "true"
     AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
     AUTORUN_LARAVEL_OPTIMIZE: "true"
+
+    # Docker Swarm expands this per task to the node hostname.
+    # Double-escaped: Miabi renders env twice (GitOps file + apply). After
+    # both passes the value must still be the Swarm literal {{.Node.Hostname}}.
+    # Listed in secretEnv so self-heal does not treat the live hostname as
+    # drift against the template.
+    NODE_HOSTNAME: '{{`{{ "{{.Node.Hostname}}" }}`}}'
   secretEnv:
     - APP_KEY
     - DB_PASSWORD
     - AWS_SECRET_ACCESS_KEY
+    - NODE_HOSTNAME
   resources:
     memory: 1Gi
     cpu: "1"

@@ -33,7 +33,9 @@ final class SwarmRuntime
 
     private static function resolvedEnv(string $key): ?string
     {
-        $value = trim((string) env($key, ''));
+        $fromEnv = (string) env($key, '');
+        $fromProcess = (string) (getenv($key) ?: '');
+        $value = trim($fromEnv !== '' ? $fromEnv : $fromProcess);
 
         if ($value === '' || str_contains($value, '{{')) {
             return null;
