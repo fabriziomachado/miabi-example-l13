@@ -1,12 +1,19 @@
-# Production desired state — same names as .miabi/envs/dev, digest-pinned and
-# scheduled as a Swarm service. Do not point a second GitSource at this folder
-# in a workspace that already syncs .miabi/envs/dev: the names collide on purpose.
+# Production desired state for the workspace `production` (id 2).
+# Same resource names as .miabi/envs/dev. Apply this file only there:
+# a GitSource in the system workspace would collide with dev.
 #
-# Promotion = one commit that sets `digest` (and usually `tag`) to the pipeline's
-# $MIABI_IMAGE_DIGEST. A revert commit rolls back. This is not done on every
-# dev deploy: .miabi/envs/dev stays a Git source and `.miabi/pipeline.yaml` ships it.
+# The Laravel image is pinned by digest. Promotion is one commit that sets
+# `digest` (and usually `tag`) to a build that already passed in dev, copied
+# into this workspace's registry namespace (ws_2). The built-in registry
+# refuses an image that names another workspace (ws_1). A revert commit
+# rolls back. The digest below is a placeholder, not an image.
 #
-# APP_KEY is not in this file. Set it in the panel (secret). Do not reuse the dev key.
+# Files go to MinIO in this same workspace, so both replicas see one bucket.
+# Dev already proved Docker Hub will not serve minio/minio here: before the
+# first sync, copy registry.miabi.unesc.net/ws_1/minio into
+# registry.miabi.unesc.net/ws_2/minio. Create the bucket `laravel` after
+# MinIO is up. APP_KEY and the two passwords below are placeholders;
+# set the real values in this workspace's vault. Do not reuse the dev key.
 apiVersion: miabi.io/v1
 kind: Database
 metadata: { name: laravel-db }
@@ -17,19 +24,44 @@ spec:
 ---
 apiVersion: miabi.io/v1
 kind: Volume
-metadata: { name: laravel-uploads }
+metadata: { name: minio-data }
 spec:
   size: 20Gi
-  # Uncomment when shared storage is registered (replicas may land on other nodes):
-  # storageClass: nfs-shared
+---
+apiVersion: miabi.io/v1
+kind: Application
+metadata: { name: minio }
+spec:
+  image: registry.miabi.unesc.net/ws_2/minio
+  command: ["server", "/data", "--console-address", ":9001"]
+  ports:
+    - container: 9000
+      scheme: http
+    - container: 9001
+      scheme: http
+  mounts:
+    - volume: minio-data
+      path: /data
+  env:
+    MINIO_ROOT_USER: minioadmin
+    MINIO_ROOT_PASSWORD: change-me
+  secretEnv:
+    - MINIO_ROOT_PASSWORD
+  healthcheck:
+    type: http
+    path: /minio/health/live
+    port: 9000
+    intervalSeconds: 30
+    timeoutSeconds: 5
+    retries: 3
+    startPeriodSeconds: 15
 ---
 apiVersion: miabi.io/v1
 kind: Application
 metadata: { name: laravel-example }
 spec:
-  image: registry.miabi.unesc.net/ws_1/laravel-example
-  # Replace both with the run you are promoting. The digest below is a placeholder,
-  # not an image in this registry.
+  image: registry.miabi.unesc.net/ws_2/laravel-example
+  # Replace both with the run you are promoting into ws_2.
   tag: "0"
   digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   ports:
@@ -37,9 +69,7 @@ spec:
       scheme: http
   deployment:
     runtime: service
-    # One replica: laravel-uploads is node-local. Raising this needs a shared
-    # storageClass (see the Volume note) or FILESYSTEM_DISK=s3.
-    replicas: 1
+    replicas: 2
     strategy: rolling
     update:
       parallelism: 1
@@ -71,7 +101,16 @@ spec:
     DB_PASSWORD: "{{ .databases.laravel-db.password }}"
     DB_SSLMODE: disable
 
-    FILESYSTEM_DISK: public
+    # Both replicas share the MinIO declared above. The host is the address
+    # this workspace dials, not the dev alias mb-app-….
+    FILESYSTEM_DISK: s3
+    AWS_ACCESS_KEY_ID: minioadmin
+    AWS_SECRET_ACCESS_KEY: change-me
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_BUCKET: laravel
+    AWS_ENDPOINT: "http://{{ .applications.minio.host }}:9000"
+    AWS_URL: "http://{{ .applications.minio.host }}:9000"
+    AWS_USE_PATH_STYLE_ENDPOINT: "true"
     SESSION_DRIVER: database
     CACHE_STORE: database
     QUEUE_CONNECTION: database
@@ -94,13 +133,13 @@ spec:
     NODE_HOSTNAME: '{{`{{ "{{.Node.Hostname}}" }}`}}'
   secretEnv:
     - DB_PASSWORD
-  mounts:
-    - volume: laravel-uploads
-      path: /var/www/html/storage/app/public
+    - AWS_SECRET_ACCESS_KEY
   resources:
     memory: 1Gi
     cpu: "1"
 ---
+# The zone miabi.unesc.net is already verified on the platform. It is not
+# declared here so GitOps does not take ownership of that domain.
 apiVersion: miabi.io/v1
 kind: Route
 metadata: { name: laravel-example }
