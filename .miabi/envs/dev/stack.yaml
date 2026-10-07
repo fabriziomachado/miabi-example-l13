@@ -1,19 +1,15 @@
-# Dev desired state for miabi-example-l13.
+# Dev desired state for the develop workspace.
 #
-# Two different jobs, as in the Miabi docs (Pipelines, Deploy on Push, GitOps):
-#   • This file is the stack: database, route, env, resources.
-#   • .miabi/pipeline.yaml is the image. `uses: deploy` rolls out each push
-#     by digest. Do not write that tag or digest here — a git app is described
-#     by its source, and the generated tag (run-<n>) is not a manifest field.
-#   • .miabi/envs/prod is the promotion file. Pin $MIABI_IMAGE_DIGEST there,
-#     in another workspace. Syncing both folders here would collide on names.
-#
-# Point a GitSource at this folder (.miabi/envs/dev), ref main. Automatic,
+# Point a GitSource at this folder (.miabi/envs/dev), ref develop. Automatic,
 # prune and self-heal are the intended policy: Git is the desired state.
-# Secrets are names in the vault, not values. Create them once in
-# Sources → Secrets (laravel-app-key, minio-root-password). A missing
-# name fails the sync instead of writing a placeholder.
-# The zone miabi.unesc.net is already verified; it is not declared here.
+# The pipeline on the develop branch builds miabil13 and `uses: deploy` rolls
+# the digest out. Do not write that tag or digest here.
+#
+# Secrets are names in the vault, not values. Create laravel-app-key once in
+# Sources → Secrets (php artisan key:generate --show, base64:…). Do not set
+# generate: true on it: a random 32-character string is not a Laravel key.
+# minio-root-password is generated on first apply. The zone miabi.unesc.net
+# is already verified; it is not declared here.
 apiVersion: miabi.io/v1
 kind: Database
 metadata: { name: laravel-db }
@@ -24,23 +20,68 @@ spec:
   instance: auto
 ---
 apiVersion: miabi.io/v1
+kind: Volume
+metadata: { name: minio-data }
+spec:
+  size: 20Gi
+---
+apiVersion: miabi.io/v1
+kind: Secret
+metadata: { name: minio-root-password }
+spec:
+  generate: true
+  length: 32
+---
+apiVersion: miabi.io/v1
 kind: Application
-metadata: { name: laravel-example }
+metadata: { name: minio }
+spec:
+  # Copied once from the system registry. Docker Hub does not serve this image.
+  image: registry.miabi.unesc.net/develop/minio:release-2025-09-07
+  command: ["server", "/data", "--console-address", ":9001"]
+  ports:
+    - container: 9000
+      scheme: http
+    - container: 9001
+      scheme: http
+  mounts:
+    - volume: minio-data
+      path: /data
+  deployment:
+    runtime: service
+    replicas: 1
+  env:
+    MINIO_ROOT_USER: minioadmin
+    MINIO_ROOT_PASSWORD: "{{ .secrets.minio-root-password }}"
+  secretEnv:
+    - MINIO_ROOT_PASSWORD
+  healthcheck:
+    type: http
+    path: /minio/health/live
+    port: 9000
+    intervalSeconds: 30
+    timeoutSeconds: 5
+    retries: 3
+    startPeriodSeconds: 15
+---
+apiVersion: miabi.io/v1
+kind: Application
+metadata: { name: miabil13 }
 spec:
   # Build from Git. The pipeline deploys the image; this block does not pin it.
   source:
     git: https://github.com/fabriziomachado/miabi-example-l13.git
-    ref: main
+    ref: develop
     buildMethod: dockerfile
   ports:
     - container: 8080
       scheme: http
   deployment:
-    # Two Swarm tasks, free to land on either node. Postgres is reached by
-    # name on the overlay network, so the database does not pin a task.
-    # There is no shared volume: session, cache and queue live in Postgres,
-    # and files use the s3 disk against the MinIO already running in this
-    # workspace (alias below). A node-local volume would pin every task.
+    # Two Swarm tasks, free to land on either node. Postgres and MinIO are
+    # reached by name on the overlay network. There is no volume on this app,
+    # so the scheduler can place one task on each node. An empty constraint
+    # list is what allows that; pinning a hostname would put both tasks on
+    # the same node.
     runtime: service
     replicas: 2
     strategy: rolling
@@ -61,11 +102,11 @@ spec:
     startPeriodSeconds: 90
   env:
     APP_NAME: Laravel
-    APP_ENV: production
+    APP_ENV: development
     APP_DEBUG: "false"
     APP_KEY: "{{ .secrets.laravel-app-key }}"
-    APP_URL: "https://laravel-example.miabi.unesc.net"
-    ASSET_URL: "https://laravel-example.miabi.unesc.net"
+    APP_URL: "https://miabil13-dev.miabi.unesc.net"
+    ASSET_URL: "https://miabil13-dev.miabi.unesc.net"
 
     LOG_CHANNEL: stderr
     LOG_LEVEL: info
@@ -80,15 +121,15 @@ spec:
     DB_SSLMODE: disable
 
     # Default disk is s3 so both replicas see the same files. The bucket
-    # `laravel` lives on the workspace MinIO. The password is the vault
-    # secret minio-root-password — the same value minio-1 uses as root.
+    # `laravel` lives on the MinIO declared above. The password is the vault
+    # secret minio-root-password — the same value that app uses as root.
     FILESYSTEM_DISK: s3
     AWS_ACCESS_KEY_ID: minioadmin
     AWS_SECRET_ACCESS_KEY: "{{ .secrets.minio-root-password }}"
     AWS_DEFAULT_REGION: us-east-1
     AWS_BUCKET: laravel
-    AWS_ENDPOINT: http://mb-app-u3fltfmh-18:9000
-    AWS_URL: http://mb-app-u3fltfmh-18:9000
+    AWS_ENDPOINT: "http://{{ .applications.minio.host }}:9000"
+    AWS_URL: "http://{{ .applications.minio.host }}:9000"
     AWS_USE_PATH_STYLE_ENDPOINT: "true"
     SESSION_DRIVER: database
     CACHE_STORE: database
@@ -126,10 +167,10 @@ spec:
 # ownership of that domain.
 apiVersion: miabi.io/v1
 kind: Route
-metadata: { name: laravel-example }
+metadata: { name: miabil13 }
 spec:
-  hosts: [laravel-example.miabi.unesc.net]
-  app: laravel-example
+  hosts: [miabil13-dev.miabi.unesc.net]
+  app: miabil13
   port: 8080
   path: /
   tls: acme

@@ -1,10 +1,10 @@
 # Pipeline-as-code for this Laravel 13 + React (Inertia) app.
 # Miabi adopts this file when the application is created from Git.
 #
-# This deploys the dev app. Each push builds an image and `uses: deploy`
-# rolls that digest out. Do not copy the tag into .miabi/envs/dev/stack.yaml.
-# Production is a separate workspace: drop this deploy step there and
-# promote by committing $MIABI_IMAGE_DIGEST into .miabi/envs/prod/stack.yaml.
+# Each workspace builds its own branch. On main this pipeline listens to
+# main and deploys into the production workspace. The develop branch of this
+# file listens to develop and deploys into the develop workspace. `uses: deploy`
+# rolls that digest out. Do not copy the tag or digest into the stack YAML.
 #
 # Keep `run` as a quoted one-liner. Folded YAML (`>`) plus a line that ends
 # in `>` redirects the rest of the script to /dev/null, so composer never
@@ -12,7 +12,7 @@
 apiVersion: miabi.io/v1
 kind: Pipeline
 metadata:
-  name: laravel-example
+  name: miabil13
 on:
   push:
     branches: [main]

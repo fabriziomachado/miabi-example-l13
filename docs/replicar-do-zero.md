@@ -1,102 +1,88 @@
 # Replicar do zero
 
-Passo a passo para publicar esta app (Laravel 13 + Inertia/React) no Miabi e
-testar de novo. Painel deste ambiente: <https://painel.miabi.unesc.net>,
-workspace **Miabi System**. URL pública:
-<https://laravel-example.miabi.unesc.net>.
+Painel: <https://painel.miabi.unesc.net>. Cada ambiente é um workspace. O menu
+Environments não entra.
 
-Documentação da plataforma: <https://docs.miabi.io/docs/getting-started/introduction>
-(pipelines, GitOps e a referência do manifesto).
+| Workspace | GitOps | Pipeline | Host |
+| --- | --- | --- | --- |
+| **Miabi System** (id 1, handle `system`, registry `ws_1`) | ref `backup/miabi-system`, path `.miabi/envs/dev` | `laravel-example`, webhook de push desligado | <https://laravel-example.miabi.unesc.net> |
+| **Develop** (handle `develop`) | ref `develop`, path `.miabi/envs/dev` | `miabil13`, branches `[develop]` | <https://miabil13-dev.miabi.unesc.net> |
+| **production** (id 2, handle `production`, registry `ws_2`) | ref `main`, path `.miabi/envs/prod` | `miabil13`, branches `[main]` | <https://miabil13.miabi.unesc.net> |
+
+Documentação da plataforma: <https://docs.miabi.io/docs/getting-started/introduction>.
 
 Dois donos, e cada um fica com o seu:
 
 | Quem | O quê |
 | --- | --- |
-| `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest a cada push em `main` |
-| `.miabi/envs/dev/stack.yaml` | Banco, rota, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. Não fixa tag nem digest. Secrets só por nome (`{{ .secrets.* }}`) |
-| Painel | App criada a partir do Git (é isso que adota o pipeline). Vault: `laravel-app-key` e `minio-root-password` |
+| `.miabi/pipeline.yaml` | Testa, constrói a imagem e faz o deploy por digest. Em `main` escuta `main`; em `develop` escuta `develop`. |
+| `.miabi/envs/dev/stack.yaml` | Banco, MinIO, rota `miabil13-dev`, env, healthcheck HTTP `/up:8080`, 2 réplicas Swarm. `source.ref: develop`. Não fixa tag nem digest. |
+| `.miabi/envs/prod/stack.yaml` | O mesmo para production: rota `miabil13`, `source.ref: main`, Postgres dedicado. |
+| Painel | App criada a partir do Git (é isso que adota o pipeline). Vault: `laravel-app-key`. |
 
-`.miabi/envs/prod/stack.yaml` é o arquivo de promoção para **outro** workspace.
-Não crie um GitSource nele aqui: os nomes batem com os de dev de propósito.
+A branch `backup/miabi-system` é o ponto de volta da app que está no System.
+Não aponte o GitOps do System para `main` nem para `develop`.
 
-## 0. Apagar só esta app, se for um reteste
+## 0. O que não mexer no System
 
-Pare e apague a application `laravel-example`. A rota e o pipeline dela saem
-junto. Apague o GitSource `.miabi/envs/dev` e o banco lógico `laravel_db`.
+A app `laravel-example` continua no ar. O GitOps dela usa a branch
+`backup/miabi-system`. O webhook do pipeline `laravel-example` no GitHub fica
+inativo. Sem isso, um push em `main` ou `develop` volta a deployar essa app e
+a publicar imagem em `ws_1`.
 
-Deixe quietos os outros apps (react*, adminer, hello, autoscaler,
-`laravel-git-detect`), o volume `test` e o MinIO, se for reutilizar o mesmo.
+Deixe quietos os outros apps do System (react*, adminer, hello, autoscaler,
+`laravel-git-detect`) e o MinIO `minio-1`.
 
 ## 1. Pré-requisitos
 
 - Domínio `miabi.unesc.net` verificado, com wildcard. Não declare o domínio no manifesto.
-- Registry do workspace ligado.
-- Cluster Swarm com manager e pelo menos um worker.
-- Um runner online. O clone do pipeline precisa estar num diretório que o
-  Docker do host enxerga (`MIABI_RUNNER_BUILDS_DIR` montado no container do
-  runner). Sem esse mount, o passo `test-php` não acha o `composer.json`.
-- MinIO no ar na rede do workspace, com o bucket `laravel`. Anote o alias
-  interno da app (`mb-app-…`). As duas réplicas falam com ele por esse nome,
-  na porta 9000, path-style.
+- Registry do workspace ligado. A imagem fica em `ws_<id>` e também responde pelo handle (`system`, `develop`, `production`). Um token do workspace A não puxa o namespace do B.
+- `docker login registry.miabi.unesc.net` usa o handle como usuário e um API token desse workspace como senha.
+- Cluster Swarm com manager e pelo menos um worker, os dois `active`.
+- Um runner online. O clone do pipeline precisa estar num diretório que o Docker do host enxerga (`MIABI_RUNNER_BUILDS_DIR` montado no container do runner).
 
-Se o deploy do template MinIO falhar com `pull access denied for minio/minio`,
-a imagem saiu do Docker Hub. Aponte a app para uma cópia que o cluster consiga
-puxar, no registry do workspace (`registry…/ws_<id>/minio:<tag>`).
+## 2. Copiar só o MinIO
 
-## 2. No painel, antes do GitOps
+A app Laravel não se copia entre namespaces: cada pipeline constrói o commit da própria branch. O MinIO não passa pelo pipeline. A imagem que já está em `system` é copiada uma vez para cada workspace novo:
 
-1. **Sources → Git Repositories.** URL
-   `https://github.com/fabriziomachado/miabi-example-l13.git`. O repositório é
-   público.
-2. **Applications → New**, origem Git, nome `laravel-example`, branch `main`,
-   build Dockerfile, porta `8080`. Criar por Git é o que adota
-   `.miabi/pipeline.yaml`. Aplicar o manifesto não liga o pipeline.
-3. **Sources → Secrets.** Crie (ou reutilize) `laravel-app-key` com
-   `php artisan key:generate --show`, e `minio-root-password` com a senha
-   root do MinIO que já está no ar. Não cole nenhum dos dois no Git.
+```
+registry.miabi.unesc.net/system/minio:release-2025-09-07
+  → registry.miabi.unesc.net/develop/minio:release-2025-09-07
+  → registry.miabi.unesc.net/production/minio:release-2025-09-07
+```
 
-## 3. Ajustar o manifesto e sincronizar
+Apontar develop ou production para `ws_1/minio` faz o pull falhar. Docker Hub também não serve `minio/minio` neste cluster.
 
-Em `.miabi/envs/dev/stack.yaml`, `AWS_ENDPOINT` e `AWS_URL` são o alias do
-MinIO desta instalação, por exemplo `http://mb-app-……:9000`.
-`APP_KEY` e `AWS_SECRET_ACCESS_KEY` apontam para o vault
-(`{{ .secrets.laravel-app-key }}`, `{{ .secrets.minio-root-password }}`).
-O `healthcheck` HTTP `/up:8080` já está no manifesto. Commit e push em `main`.
+## 3. Workspace develop
 
-**GitOps → New source:**
+1. Criar o workspace, handle `develop`, display Develop.
+2. **Sources → Git Repositories.** URL `https://github.com/fabriziomachado/miabi-example-l13.git`. O repositório é público.
+3. **Sources → Secrets.** Criar `laravel-app-key` com `php artisan key:generate --show` (formato `base64:`). Não reutilizar a chave do System nem a de production. Não colocar `generate: true` nesse secret.
+4. Copiar a imagem do MinIO para `develop/minio:release-2025-09-07` (seção 2).
+5. **Applications → New**, origem Git, nome `miabil13`, branch `develop`, Dockerfile, porta `8080`. Criar por Git é o que adota `.miabi/pipeline.yaml`.
+6. **GitOps → New source:** repositório acima, ref `develop`, path `.miabi/envs/dev`, sync **automatic**, prune **ligado**, self-heal **ligado**. Abrir o diff e sincronizar.
+7. No pipeline `miabil13`, copiar o webhook e no GitHub **Settings → Webhooks** criar um hook só desse payload (content type `application/json`, evento push). Não reativar o webhook do pipeline `laravel-example` do System.
+8. Com o MinIO no ar, criar o bucket `laravel`.
 
-- repositório acima, ref `main`, path `.miabi/envs/dev`
-- sync **automatic**, prune **ligado**, self-heal **ligado**
+O sync cria o banco, o volume `minio-data`, o secret `minio-root-password`, o MinIO em 1 réplica e a rota `miabil13-dev.miabi.unesc.net`. A app sobe com 2 réplicas, sem volume e sem prender nó.
 
-Abra o diff e sincronize. O sync cria o banco lógico `laravel_db` (em cima de
-um Postgres compatível que já exista), a rota
-`laravel-example.miabi.unesc.net`, o healthcheck e sobe a app como serviço
-Swarm com 2 réplicas, sem volume e sem prender nó. Não há storage
-compartilhado neste cluster; um volume local obrigaria as duas tasks a caírem
-no mesmo nó.
+## 4. Workspace production
 
-Se o sync falhar com `unknown secret`, o vault ainda não tem um dos nomes
-acima. Crie o secret e sincronize de novo. O self-heal não apaga o valor:
-o Git só declara o nome.
+O workspace `production` (id 2) já existe. Repetir a seção 3 com:
 
-## 4. Pipeline
+- outra `laravel-app-key`
+- imagem em `production/minio:release-2025-09-07` (namespace `ws_2`)
+- app Git na branch `main`
+- GitSource ref `main`, path `.miabi/envs/prod`
+- outro webhook de push, o do pipeline deste workspace
 
-**Pipelines → laravel-example → Run** (branch `main`), enquanto o webhook não
-estiver no GitHub. Os quatro passos são `test-php`, `test-frontend`, `build`,
-`deploy`. O `uses: deploy` publica a imagem por digest. Não copie a tag
-`run-<n>` para o `.miabi/envs/dev`.
-
-Para o push disparar sozinho: no pipeline, o ícone de webhook, e no GitHub
-**Settings → Webhooks**, evento push, content type `application/json`.
+Não criar esse GitSource dentro do Miabi System.
 
 ## 5. O que tem que passar
 
-- Os quatro passos do pipeline verdes, e uma tag nova em **Container Registry**.
-- App `running`, runtime service, 2 réplicas, uma task no manager e outra no worker.
-- `curl -sI https://laravel-example.miabi.unesc.net/` e `…/up` com HTTP 200.
-- Dentro de um container da app, gravar e ler um objeto no disco `s3`
-  (bucket `laravel`). As duas réplicas usam o mesmo bucket, então o arquivo
-  não depende do nó.
-
-`.miabi/envs/prod` continua sem GitSource. Promover é outro workspace: tire o
-`uses: deploy` de lá e grave o `$MIABI_IMAGE_DIGEST` no manifesto de prod.
+- Push em `develop`: pipeline do workspace develop verde, imagem em `ws_<id>/miabil13`, `https://miabil13-dev.miabi.unesc.net/` e `/up` com HTTP 200.
+- Push em `main`: o mesmo em `ws_2/miabil13` e em `https://miabil13.miabi.unesc.net/`.
+- Nas duas apps, as 2 tasks em nós diferentes (uma no manager, uma no worker). Se as duas caírem no mesmo nó, conferir se o outro está `active` (não `pause` nem `drain`). Não pinar hostname.
+- O push de uma branch não cria deployment na app do outro workspace. Se criar, o webhook que disparou errado sai.
+- `https://laravel-example.miabi.unesc.net/` continua 200, imagem ainda em `ws_1`.
+- Dentro de um container da app, gravar e ler um objeto no disco `s3` (bucket `laravel`). As duas réplicas usam o mesmo bucket.

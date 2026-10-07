@@ -1,15 +1,16 @@
 # Production desired state for the workspace `production` (id 2).
-# Same resource names as .miabi/envs/dev. Apply this file only there:
-# a GitSource in the system workspace would collide with dev.
+# Apply this file only there. A GitSource in the system workspace would
+# collide with the backup app that still serves laravel-example.
 #
-# Secrets are vault names, not values. laravel-app-key and
-# minio-root-password are generated on first apply and then left alone.
-# Do not reuse the dev APP_KEY. Files go to MinIO in this workspace.
+# Secrets are vault names, not values. Create laravel-app-key in the vault
+# before the first sync (php artisan key:generate --show). Do not generate it
+# here: length 32 is not a Laravel key, and do not reuse the system or develop
+# key. minio-root-password is generated on first apply.
 #
 # Dev already proved Docker Hub will not serve minio/minio here: before the
-# first sync, copy registry.miabi.unesc.net/ws_1/minio into
-# registry.miabi.unesc.net/ws_2/minio. Create the bucket `laravel` after
-# MinIO is up.
+# first sync, copy registry.miabi.unesc.net/system/minio:release-2025-09-07
+# into registry.miabi.unesc.net/production/minio:release-2025-09-07.
+# Create the bucket `laravel` after MinIO is up.
 apiVersion: miabi.io/v1
 kind: Database
 metadata: { name: laravel-db }
@@ -26,13 +27,6 @@ spec:
 ---
 apiVersion: miabi.io/v1
 kind: Secret
-metadata: { name: laravel-app-key }
-spec:
-  generate: true
-  length: 32
----
-apiVersion: miabi.io/v1
-kind: Secret
 metadata: { name: minio-root-password }
 spec:
   generate: true
@@ -42,7 +36,7 @@ apiVersion: miabi.io/v1
 kind: Application
 metadata: { name: minio }
 spec:
-  image: registry.miabi.unesc.net/ws_2/minio
+  image: registry.miabi.unesc.net/production/minio:release-2025-09-07
   command: ["server", "/data", "--console-address", ":9001"]
   ports:
     - container: 9000
@@ -52,6 +46,9 @@ spec:
   mounts:
     - volume: minio-data
       path: /data
+  deployment:
+    runtime: service
+    replicas: 1
   env:
     MINIO_ROOT_USER: minioadmin
     MINIO_ROOT_PASSWORD: "{{ .secrets.minio-root-password }}"
@@ -68,12 +65,13 @@ spec:
 ---
 apiVersion: miabi.io/v1
 kind: Application
-metadata: { name: laravel-example }
+metadata: { name: miabil13 }
 spec:
-  image: registry.miabi.unesc.net/ws_2/laravel-example
-  # Replace both with the run you are promoting into ws_2.
-  tag: "0"
-  digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  # Build from Git. The pipeline on main deploys the image; this block does not pin it.
+  source:
+    git: https://github.com/fabriziomachado/miabi-example-l13.git
+    ref: main
+    buildMethod: dockerfile
   ports:
     - container: 8080
       scheme: http
@@ -84,6 +82,8 @@ spec:
     update:
       parallelism: 1
       delaySeconds: 15
+  placement:
+    constraints: []
   healthcheck:
     type: http
     path: /up
@@ -97,8 +97,8 @@ spec:
     APP_ENV: production
     APP_DEBUG: "false"
     APP_KEY: "{{ .secrets.laravel-app-key }}"
-    APP_URL: "https://laravel-prod.miabi.unesc.net"
-    ASSET_URL: "https://laravel-prod.miabi.unesc.net"
+    APP_URL: "https://miabil13.miabi.unesc.net"
+    ASSET_URL: "https://miabil13.miabi.unesc.net"
 
     LOG_CHANNEL: stderr
     LOG_LEVEL: info
@@ -112,8 +112,7 @@ spec:
     DB_PASSWORD: "{{ .databases.laravel-db.password }}"
     DB_SSLMODE: disable
 
-    # Both replicas share the MinIO declared above. The host is the address
-    # this workspace dials, not the dev alias mb-app-….
+    # Both replicas share the MinIO declared above.
     FILESYSTEM_DISK: s3
     AWS_ACCESS_KEY_ID: minioadmin
     AWS_SECRET_ACCESS_KEY: "{{ .secrets.minio-root-password }}"
@@ -156,10 +155,10 @@ spec:
 # declared here so GitOps does not take ownership of that domain.
 apiVersion: miabi.io/v1
 kind: Route
-metadata: { name: laravel-example }
+metadata: { name: miabil13 }
 spec:
-  hosts: [laravel-prod.miabi.unesc.net]
-  app: laravel-example
+  hosts: [miabil13.miabi.unesc.net]
+  app: miabil13
   port: 8080
   path: /
   tls: acme
