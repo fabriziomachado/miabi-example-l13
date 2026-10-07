@@ -35,11 +35,11 @@ Deixe quietos os outros apps do System (react*, adminer, hello, autoscaler,
 
 ## 1. Pré-requisitos
 
-- Domínio `miabi.unesc.net` verificado, com wildcard. Não declare o domínio no manifesto.
+- Domínio `miabi.unesc.net` com wildcard. Não declare o domínio no manifesto. A verificação é exclusiva de um workspace: o System já é o dono. Em develop e production, registre o mesmo domínio (fica não verificado) e marque o workspace como privileged. Sem isso a rota não sai do estado offline, porque um segundo workspace não consegue provar a mesma zona.
 - Registry do workspace ligado. A imagem fica em `ws_<id>` e também responde pelo handle (`system`, `develop`, `production`). Um token do workspace A não puxa o namespace do B.
 - `docker login registry.miabi.unesc.net` usa o handle como usuário e um API token desse workspace como senha.
 - Cluster Swarm com manager e pelo menos um worker, os dois `active`.
-- Um runner online. O clone do pipeline precisa estar num diretório que o Docker do host enxerga (`MIABI_RUNNER_BUILDS_DIR` montado no container do runner).
+- Um runner que os dois workspaces possam usar. O runner do System é `scope: workspace` e não constrói job de outro workspace. O builder desta instalação é o runner compartilhado `wsl-builder` (`scope: shared`). O clone do pipeline precisa estar num diretório que o Docker do host enxerga (`MIABI_RUNNER_BUILDS_DIR` montado no container do runner).
 
 ## 2. Copiar só o MinIO
 
@@ -55,7 +55,7 @@ Apontar develop ou production para `ws_1/minio` faz o pull falhar. Docker Hub ta
 
 ## 3. Workspace develop
 
-1. Criar o workspace, handle `develop`, display Develop.
+1. Criar o workspace, handle `develop`, display Develop. Marcar privileged (admin), porque a zona `miabi.unesc.net` já está verificada no System e a plataforma não deixa um segundo workspace verificá-la. Em **Domains**, registrar `miabi.unesc.net` wildcard, TLS acme. Não precisa de um TXT novo.
 2. **Sources → Git Repositories.** URL `https://github.com/fabriziomachado/miabi-example-l13.git`. O repositório é público.
 3. **Sources → Secrets.** Criar `laravel-app-key` com `php artisan key:generate --show` (formato `base64:`). Não reutilizar a chave do System nem a de production. Não colocar `generate: true` nesse secret.
 4. Copiar a imagem do MinIO para `develop/minio:release-2025-09-07` (seção 2).
@@ -68,7 +68,7 @@ O sync cria o banco, o volume `minio-data`, o secret `minio-root-password`, o Mi
 
 ## 4. Workspace production
 
-O workspace `production` (id 2) já existe. Repetir a seção 3 com:
+O workspace `production` (id 2) já existe. Ele também precisa ser privileged e ter o domínio `miabi.unesc.net` registrado (não verificado). Repetir a seção 3 com:
 
 - outra `laravel-app-key`
 - imagem em `production/minio:release-2025-09-07` (namespace `ws_2`)
